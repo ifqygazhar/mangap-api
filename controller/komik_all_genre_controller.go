@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"crypto/tls"
 	"log"
 	"mangap-api/entity"
 	"mangap-api/util"
+	"net/http"
 
 	"github.com/gocolly/colly"
 	"github.com/gofiber/fiber/v2"
@@ -15,17 +17,25 @@ func FetchAllGenres(c *fiber.Ctx) error {
 	collector := colly.NewCollector(
 		colly.UserAgent("Mozilla/5.0"),
 	)
-
-	collector.OnHTML("#content > .wrapper > #sidebar > .section > ul.genre > li", func(e *colly.HTMLElement) {
-		title := e.ChildText("a")
-		href := e.ChildAttr("a", "href")
-
-		komik := entity.Komik{
-			Title: title,
-			Href:  href,
-		}
-		komikList = append(komikList, komik)
+	collector.WithTransport(&http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
 	})
+
+	collector.OnHTML(
+		"#content > .wrapper > #sidebar > .section > ul.genre > li",
+		func(e *colly.HTMLElement) {
+			title := e.ChildText("a")
+			href := e.ChildAttr("a", "href")
+
+			komik := entity.Komik{
+				Title: title,
+				Href:  href,
+			}
+			komikList = append(komikList, komik)
+		},
+	)
 
 	collector.OnError(func(_ *colly.Response, err error) {
 		log.Println("Request error:", err)

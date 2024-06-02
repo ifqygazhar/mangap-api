@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"crypto/tls"
 	"log"
 	"mangap-api/entity"
 	"mangap-api/util"
+	"net/http"
 
 	"github.com/gocolly/colly"
 	"github.com/gofiber/fiber/v2"
@@ -23,25 +25,35 @@ func FetchKomikList(c *fiber.Ctx) error {
 	collector := colly.NewCollector(
 		colly.UserAgent("Mozilla/5.0"),
 	)
-
-	collector.OnHTML("#content > .wrapper > .komiklist > .komiklist_filter > .list-update > .list-update_items > .list-update_items-wrapper > .list-update_item", func(e *colly.HTMLElement) {
-		title := e.ChildText("a > .list-update_item-info > h3")
-		chapter := e.ChildText("a > .list-update_item-info > .other > .chapter")
-		typ := e.ChildText("a > .list-update_item-image > .type")
-		thumbnail := e.ChildAttr("a > .list-update_item-image > img", "src")
-		rating := e.ChildText("a > .list-update_item-info > .other > .rate > .rating > .numscore")
-		href := e.ChildAttr("a", "href")
-
-		komik := entity.ListOfKomik{
-			Title:     title,
-			Chapter:   chapter,
-			Type:      typ,
-			Thumbnail: thumbnail,
-			Rating:    rating,
-			Href:      href,
-		}
-		komikList = append(komikList, komik)
+	collector.WithTransport(&http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
 	})
+
+	collector.OnHTML(
+		"#content > .wrapper > .komiklist > .komiklist_filter > .list-update > .list-update_items > .list-update_items-wrapper > .list-update_item",
+		func(e *colly.HTMLElement) {
+			title := e.ChildText("a > .list-update_item-info > h3")
+			chapter := e.ChildText("a > .list-update_item-info > .other > .chapter")
+			typ := e.ChildText("a > .list-update_item-image > .type")
+			thumbnail := e.ChildAttr("a > .list-update_item-image > img", "src")
+			rating := e.ChildText(
+				"a > .list-update_item-info > .other > .rate > .rating > .numscore",
+			)
+			href := e.ChildAttr("a", "href")
+
+			komik := entity.ListOfKomik{
+				Title:     title,
+				Chapter:   chapter,
+				Type:      typ,
+				Thumbnail: thumbnail,
+				Rating:    rating,
+				Href:      href,
+			}
+			komikList = append(komikList, komik)
+		},
+	)
 
 	collector.OnError(func(_ *colly.Response, err error) {
 		log.Println("Request error:", err)

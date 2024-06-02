@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"crypto/tls"
 	"log"
 	"mangap-api/entity"
 	"mangap-api/util"
+	"net/http"
 	"strconv"
 
 	"github.com/gocolly/colly"
@@ -19,8 +21,13 @@ func FetchLatestKomik(c *fiber.Ctx) error {
 	komikList := []entity.LatestKomik{}
 
 	collector := colly.NewCollector(
-		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"),
+		colly.UserAgent("Mozilla/5.0"),
 	)
+	collector.WithTransport(&http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	})
 
 	var currentPage, lengthPage string
 
@@ -28,9 +35,14 @@ func FetchLatestKomik(c *fiber.Ctx) error {
 		currentPage = e.ChildText(".pagination > .page-numbers.current")
 
 		for i := 5; i <= 11; i++ {
-			classAttr := e.ChildAttr(".pagination > .page-numbers:nth-child("+strconv.Itoa(i)+")", "class")
+			classAttr := e.ChildAttr(
+				".pagination > .page-numbers:nth-child("+strconv.Itoa(i)+")",
+				"class",
+			)
 			if classAttr == "next page-numbers" {
-				lengthPage = e.ChildText(".pagination > .page-numbers:nth-child(" + strconv.Itoa(i-1) + ")")
+				lengthPage = e.ChildText(
+					".pagination > .page-numbers:nth-child(" + strconv.Itoa(i-1) + ")",
+				)
 				break
 			} else if classAttr == "page-numbers current" {
 				lengthPage = e.ChildText(".pagination > .page-numbers:nth-child(" + strconv.Itoa(i) + ")")
@@ -38,24 +50,29 @@ func FetchLatestKomik(c *fiber.Ctx) error {
 			}
 		}
 
-		e.ForEach(".list-update_items > .list-update_items-wrapper > .list-update_item", func(_ int, el *colly.HTMLElement) {
-			title := el.ChildText("a > .list-update_item-info > h3")
-			chapter := el.ChildText("a > .list-update_item-info > .other > .chapter")
-			typ := el.ChildText("a > .list-update_item-image > .type")
-			thumbnail := el.ChildAttr("a > .list-update_item-image > img", "src")
-			rating := el.ChildText("a > .list-update_item-info > .other > .rate > .rating > .numscore")
-			href := el.ChildAttr("a", "href")
+		e.ForEach(
+			".list-update_items > .list-update_items-wrapper > .list-update_item",
+			func(_ int, el *colly.HTMLElement) {
+				title := el.ChildText("a > .list-update_item-info > h3")
+				chapter := el.ChildText("a > .list-update_item-info > .other > .chapter")
+				typ := el.ChildText("a > .list-update_item-image > .type")
+				thumbnail := el.ChildAttr("a > .list-update_item-image > img", "src")
+				rating := el.ChildText(
+					"a > .list-update_item-info > .other > .rate > .rating > .numscore",
+				)
+				href := el.ChildAttr("a", "href")
 
-			komik := entity.LatestKomik{
-				Title:     title,
-				Href:      href,
-				Thumbnail: thumbnail,
-				Type:      typ,
-				Chapter:   chapter,
-				Rating:    rating,
-			}
-			komikList = append(komikList, komik)
-		})
+				komik := entity.LatestKomik{
+					Title:     title,
+					Href:      href,
+					Thumbnail: thumbnail,
+					Type:      typ,
+					Chapter:   chapter,
+					Rating:    rating,
+				}
+				komikList = append(komikList, komik)
+			},
+		)
 	})
 
 	collector.OnError(func(_ *colly.Response, err error) {
